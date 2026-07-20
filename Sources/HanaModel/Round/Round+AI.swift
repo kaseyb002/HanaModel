@@ -12,17 +12,54 @@ extension Round {
             return
         }
 
-        switch phase {
+        // Nail anyone who forgot to call 하나 before this player acts.
+        catchMissedHanaIfNeeded(callerID: currentPlayerID)
+
+        // Re-read state: a catch does not change whose turn it is, but the round
+        // may have ended if the deck emptied while applying the penalty.
+        guard case .waitingForPlayer(let playerID, let currentPhase) = state,
+              playerID == currentPlayerID
+        else {
+            return
+        }
+
+        // Call 하나 while still holding 2 cards, before discarding down to one.
+        callHanaIfHoldingTwoCards(playerID: playerID)
+
+        switch currentPhase {
         case .playOrDraw:
-            makeAIPlayOrDraw(playerID: currentPlayerID, difficulty: difficulty)
+            makeAIPlayOrDraw(playerID: playerID, difficulty: difficulty)
 
         case .drewCard:
-            makeAIDrawnCardDecision(playerID: currentPlayerID, difficulty: difficulty)
+            makeAIDrawnCardDecision(playerID: playerID, difficulty: difficulty)
         }
 
-        if ruleOptions.unoCallPenalty && playerWhoNeedsToCallHana == currentPlayerID {
-            try? callHana(playerID: currentPlayerID)
+        // Safety net if they somehow reached one card without a prior call.
+        if ruleOptions.unoCallPenalty && playerWhoNeedsToCallHana == playerID {
+            try? callHana(playerID: playerID)
         }
+    }
+
+    private mutating func callHanaIfHoldingTwoCards(playerID: PlayerID) {
+        guard ruleOptions.unoCallPenalty,
+              let playerIndex = playerHandIndex(for: playerID),
+              playerHands[playerIndex].cards.count == 2,
+              playerHands[playerIndex].calledHana == false
+        else {
+            return
+        }
+        try? callHana(playerID: playerID)
+    }
+
+    /// Catches a player who dropped to one card without calling 하나.
+    private mutating func catchMissedHanaIfNeeded(callerID: PlayerID) {
+        guard ruleOptions.unoCallPenalty,
+              let targetID = playerWhoNeedsToCallHana,
+              targetID != callerID
+        else {
+            return
+        }
+        try? catchMissedHana(callerID: callerID, targetID: targetID)
     }
 
     // MARK: - Play or Draw

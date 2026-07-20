@@ -821,6 +821,144 @@ import Testing
     #expect(round.playerWhoNeedsToCallHana == nil)
 }
 
+@Test func classicRulesMatchMattelUnoCallPenalty() {
+    #expect(RuleOptions.classic.unoCallPenalty == true)
+    #expect(RuleOptions.classic.stackingDrawCards == false)
+    #expect(RuleOptions.classic.jumpIn == false)
+    #expect(RuleOptions.classic.sevenZero == false)
+    #expect(RuleOptions.classic.drawUntilPlayable == false)
+    #expect(RuleOptions.classic.forcePlayDrawnCard == false)
+    #expect(RuleOptions.classic.allowWildDrawFourAnytime == false)
+}
+
+@Test func preemptiveHanaCallProtectsFromCatch() throws {
+    let cookedCards: [Card] = buildCookedDeck(
+        player1Cards: [
+            .number(color: .red, rank: .one),
+            .number(color: .red, rank: .two),
+            .number(color: .red, rank: .three),
+            .number(color: .red, rank: .four),
+            .number(color: .red, rank: .five),
+            .number(color: .red, rank: .six),
+            .number(color: .red, rank: .seven),
+        ],
+        player2Cards: [
+            .number(color: .blue, rank: .one),
+            .number(color: .blue, rank: .two),
+            .number(color: .blue, rank: .three),
+            .number(color: .blue, rank: .four),
+            .number(color: .blue, rank: .five),
+            .number(color: .blue, rank: .six),
+            .number(color: .blue, rank: .seven),
+        ],
+        firstDiscard: .number(color: .red, rank: .zero),
+        drawPileKind: .number(color: .green, rank: .one)
+    )
+
+    var round: Round = try .init(
+        ruleOptions: .classic,
+        cookedDeck: cookedCards,
+        players: [
+            .fake(id: "p1", name: "Alice", points: 0),
+            .fake(id: "p2", name: "Bob", points: 0),
+        ]
+    )
+
+    for rank in [CardRank.one, .two, .three, .four, .five] {
+        let cardID: CardID = round.playerHands[0].cards.first {
+            round.cardsMap[$0]?.kind == .number(color: .red, rank: rank)
+        }!
+        try round.playCard(cardID)
+
+        if case .waitingForPlayer(_, .playOrDraw) = round.state {
+            try round.drawCard()
+            if case .waitingForPlayer(_, .drewCard) = round.state {
+                try round.passAfterDraw()
+            }
+        }
+    }
+
+    #expect(round.playerHands[0].cards.count == 2)
+
+    // Call 하나 before discarding down to one.
+    try round.callHana(playerID: "p1")
+    #expect(round.playerHands[0].calledHana == true)
+
+    let sixID: CardID = round.playerHands[0].cards.first {
+        round.cardsMap[$0]?.kind == .number(color: .red, rank: .six)
+    }!
+    try round.playCard(sixID)
+
+    #expect(round.playerHands[0].cards.count == 1)
+    #expect(round.playerWhoNeedsToCallHana == nil)
+
+    #expect(throws: HanaError.noMissedHanaToCatch) {
+        try round.catchMissedHana(callerID: "p2", targetID: "p1")
+    }
+}
+
+@Test func aiCatchesMissedHanaCall() throws {
+    let cookedCards: [Card] = buildCookedDeck(
+        player1Cards: [
+            .number(color: .red, rank: .one),
+            .number(color: .red, rank: .two),
+            .number(color: .red, rank: .three),
+            .number(color: .red, rank: .four),
+            .number(color: .red, rank: .five),
+            .number(color: .red, rank: .six),
+            .number(color: .red, rank: .seven),
+        ],
+        player2Cards: [
+            .number(color: .blue, rank: .one),
+            .number(color: .blue, rank: .two),
+            .number(color: .blue, rank: .three),
+            .number(color: .blue, rank: .four),
+            .number(color: .blue, rank: .five),
+            .number(color: .blue, rank: .six),
+            .number(color: .blue, rank: .seven),
+        ],
+        firstDiscard: .number(color: .red, rank: .zero),
+        drawPileKind: .number(color: .green, rank: .one)
+    )
+
+    var round: Round = try .init(
+        ruleOptions: .classic,
+        cookedDeck: cookedCards,
+        players: [
+            .fake(id: "p1", name: "Alice", points: 0),
+            .fake(id: "p2", name: "Bob", points: 0),
+        ]
+    )
+
+    for rank in [CardRank.one, .two, .three, .four, .five] {
+        let cardID: CardID = round.playerHands[0].cards.first {
+            round.cardsMap[$0]?.kind == .number(color: .red, rank: rank)
+        }!
+        try round.playCard(cardID)
+
+        if case .waitingForPlayer(_, .playOrDraw) = round.state {
+            try round.drawCard()
+            if case .waitingForPlayer(_, .drewCard) = round.state {
+                try round.passAfterDraw()
+            }
+        }
+    }
+
+    let sixID: CardID = round.playerHands[0].cards.first {
+        round.cardsMap[$0]?.kind == .number(color: .red, rank: .six)
+    }!
+    try round.playCard(sixID)
+
+    #expect(round.playerWhoNeedsToCallHana == "p1")
+    #expect(round.playerHands[0].cards.count == 1)
+
+    // P2's AI turn should catch P1 before playing.
+    round.makeAIMove(difficulty: .medium)
+
+    #expect(round.playerWhoNeedsToCallHana == nil)
+    #expect(round.playerHands[0].cards.count == 3)
+}
+
 // MARK: - Codable Tests
 
 @Test func roundCodable() throws {
