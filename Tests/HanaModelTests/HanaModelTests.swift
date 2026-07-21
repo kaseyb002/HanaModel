@@ -40,6 +40,22 @@ import Testing
     #expect(wildDrawFours == 4)
 }
 
+@Test func sortedForDisplayOrdersByColorThenRankWithWildsLast() {
+    let cards: [Card] = [
+        Card(id: 1, kind: .wildDrawFour(chosenColor: nil)),
+        Card(id: 2, kind: .number(color: .green, rank: .two)),
+        Card(id: 3, kind: .reverse(color: .blue)),
+        Card(id: 4, kind: .number(color: .red, rank: .nine)),
+        Card(id: 5, kind: .wild(chosenColor: nil)),
+        Card(id: 6, kind: .number(color: .yellow, rank: .zero)),
+        Card(id: 7, kind: .skip(color: .red)),
+        Card(id: 8, kind: .drawTwo(color: .green)),
+        Card(id: 9, kind: .number(color: .red, rank: .one)),
+    ]
+
+    #expect(cards.sortedForDisplay.map(\.id) == [9, 4, 7, 6, 2, 8, 3, 5, 1])
+}
+
 // MARK: - Round Creation Tests
 
 @Test func createRound() throws {
@@ -831,7 +847,7 @@ import Testing
     #expect(RuleOptions.classic.allowWildDrawFourAnytime == false)
 }
 
-@Test func preemptiveHanaCallProtectsFromCatch() throws {
+@Test func onlyLastPlayerBeforeTargetCatchesMissedHana() throws {
     let cookedCards: [Card] = buildCookedDeck(
         player1Cards: [
             .number(color: .red, rank: .one),
@@ -851,8 +867,17 @@ import Testing
             .number(color: .blue, rank: .six),
             .number(color: .blue, rank: .seven),
         ],
+        player3Cards: [
+            .number(color: .green, rank: .one),
+            .number(color: .green, rank: .two),
+            .number(color: .green, rank: .three),
+            .number(color: .green, rank: .four),
+            .number(color: .green, rank: .five),
+            .number(color: .green, rank: .six),
+            .number(color: .green, rank: .seven),
+        ],
         firstDiscard: .number(color: .red, rank: .zero),
-        drawPileKind: .number(color: .green, rank: .one)
+        drawPileKind: .number(color: .yellow, rank: .one)
     )
 
     var round: Round = try .init(
@@ -861,6 +886,7 @@ import Testing
         players: [
             .fake(id: "p1", name: "Alice", points: 0),
             .fake(id: "p2", name: "Bob", points: 0),
+            .fake(id: "p3", name: "Carol", points: 0),
         ]
     )
 
@@ -870,31 +896,36 @@ import Testing
         }!
         try round.playCard(cardID)
 
-        if case .waitingForPlayer(_, .playOrDraw) = round.state {
-            try round.drawCard()
-            if case .waitingForPlayer(_, .drewCard) = round.state {
-                try round.passAfterDraw()
+        // p2 then p3 draw/pass
+        for _ in 0..<2 {
+            if case .waitingForPlayer(_, .playOrDraw) = round.state {
+                try round.drawCard()
+                if case .waitingForPlayer(_, .drewCard) = round.state {
+                    try round.passAfterDraw()
+                }
             }
         }
     }
-
-    #expect(round.playerHands[0].cards.count == 2)
-
-    // Call 하나 before discarding down to one.
-    try round.callHana(playerID: "p1")
-    #expect(round.playerHands[0].calledHana == true)
 
     let sixID: CardID = round.playerHands[0].cards.first {
         round.cardsMap[$0]?.kind == .number(color: .red, rank: .six)
     }!
     try round.playCard(sixID)
 
+    #expect(round.playerWhoNeedsToCallHana == "p1")
     #expect(round.playerHands[0].cards.count == 1)
-    #expect(round.playerWhoNeedsToCallHana == nil)
 
-    #expect(throws: HanaError.noMissedHanaToCatch) {
-        try round.catchMissedHana(callerID: "p2", targetID: "p1")
-    }
+    // p2 is next — should NOT catch yet (not last before p1).
+    #expect(round.currentPlayerID == "p2")
+    round.makeAIMove(difficulty: .medium)
+    #expect(round.playerWhoNeedsToCallHana == "p1")
+    #expect(round.playerHands[0].cards.count == 1)
+
+    // p3 is last before p1 — should catch.
+    #expect(round.currentPlayerID == "p3")
+    round.makeAIMove(difficulty: .medium)
+    #expect(round.playerWhoNeedsToCallHana == nil)
+    #expect(round.playerHands[0].cards.count == 3)
 }
 
 @Test func aiCatchesMissedHanaCall() throws {
@@ -952,7 +983,7 @@ import Testing
     #expect(round.playerWhoNeedsToCallHana == "p1")
     #expect(round.playerHands[0].cards.count == 1)
 
-    // P2's AI turn should catch P1 before playing.
+    // With 2 players, p2 is last before p1 — catch immediately.
     round.makeAIMove(difficulty: .medium)
 
     #expect(round.playerWhoNeedsToCallHana == nil)

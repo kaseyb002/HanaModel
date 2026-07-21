@@ -83,7 +83,8 @@ extension Round {
             }
         }
 
-        playerWhoNeedsToCallHana = nil
+        // Don't clear another player's pending 하나 call — catch window lasts until
+        // the seat before them acts (modern app style).
 
         playerHands[playerIndex].cards.removeAll { $0 == cardID }
 
@@ -134,8 +135,6 @@ extension Round {
         guard let playerIndex: Int = playerHandIndex(for: currentPlayerID) else {
             throw HanaError.playerNotFound
         }
-
-        playerWhoNeedsToCallHana = nil
 
         if pendingDrawCount > 0 {
             applyDrawPenalty(to: playerIndex)
@@ -203,29 +202,20 @@ extension Round {
         advancePlayer(from: playerIndex)
     }
 
-    /// Call 하나 either preemptively (while holding 2 cards, before discarding
-    /// down to one) or after the fact (once you're already at one card).
+    /// Call 하나 after discarding down to one card (modern UNO! app style).
     public mutating func callHana(playerID: PlayerID) throws {
         guard ruleOptions.unoCallPenalty else {
+            throw HanaError.hanaCallNotNeeded
+        }
+        guard playerWhoNeedsToCallHana == playerID else {
             throw HanaError.hanaCallNotNeeded
         }
         guard let playerIndex: Int = playerHandIndex(for: playerID) else {
             throw HanaError.playerNotFound
         }
-        guard playerHands[playerIndex].calledHana == false else {
-            throw HanaError.hanaCallNotNeeded
-        }
-
-        let isPreemptiveCall: Bool = playerHands[playerIndex].cards.count == 2
-        let isLateCall: Bool = playerWhoNeedsToCallHana == playerID
-        guard isPreemptiveCall || isLateCall else {
-            throw HanaError.hanaCallNotNeeded
-        }
 
         playerHands[playerIndex].calledHana = true
-        if playerWhoNeedsToCallHana == playerID {
-            playerWhoNeedsToCallHana = nil
-        }
+        playerWhoNeedsToCallHana = nil
 
         log.addAction(.init(
             playerID: playerID,
@@ -288,7 +278,6 @@ extension Round {
             throw HanaError.invalidJumpIn
         }
 
-        playerWhoNeedsToCallHana = nil
         playerHands[playerIndex].cards.removeAll { $0 == cardID }
 
         if card.kind.isWild, let chosenColor {
@@ -326,19 +315,16 @@ extension Round {
 // MARK: - Internal Helpers
 
 extension Round {
-    /// After discarding down to one card: safe if they already called 하나,
-    /// otherwise mark them as catchable until they call or the next turn starts.
+    /// After discarding down to one card, mark the player as needing to call 하나
+    /// (modern UNO! app style — button appears once you're already at one).
     mutating func recordHanaCallRequirementIfNeeded(for playerIndex: Int) {
         guard ruleOptions.unoCallPenalty,
               playerHands[playerIndex].cards.count == 1
         else {
             return
         }
-        if playerHands[playerIndex].calledHana {
-            playerWhoNeedsToCallHana = nil
-        } else {
-            playerWhoNeedsToCallHana = playerHands[playerIndex].player.id
-        }
+        playerHands[playerIndex].calledHana = false
+        playerWhoNeedsToCallHana = playerHands[playerIndex].player.id
     }
 
     static func isExactMatch(_ a: Card.Kind, _ b: Card.Kind) -> Bool {

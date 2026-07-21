@@ -133,8 +133,51 @@ extension [Card] {
         reduce(0) { $0 + $1.kind.points }
     }
 
+    /// Color groups (red → yellow → green → blue), then rank/action within color, wilds last.
+    public var sortedForDisplay: [Card] {
+        sorted { lhs, rhs in
+            let lhsKey = lhs.displaySortKey
+            let rhsKey = rhs.displaySortKey
+            if lhsKey != rhsKey {
+                return lhsKey < rhsKey
+            }
+            return lhs.id < rhs.id
+        }
+    }
+
     public var logValue: String {
         map { $0.kind.logValue }.joined(separator: ", ")
+    }
+}
+
+private extension Card {
+    var displaySortKey: (Int, Int) {
+        switch kind {
+        case .number(let color, let rank):
+            (color.displaySortOrder, rank.rawValue)
+        case .skip(let color):
+            (color.displaySortOrder, 10)
+        case .reverse(let color):
+            (color.displaySortOrder, 11)
+        case .drawTwo(let color):
+            (color.displaySortOrder, 12)
+        case .wild:
+            (100, 0)
+        case .wildDrawFour:
+            (100, 1)
+        }
+    }
+}
+
+private extension CardColor {
+    /// Rainbow order matching the wild card gradient.
+    var displaySortOrder: Int {
+        switch self {
+        case .red: 0
+        case .yellow: 1
+        case .green: 2
+        case .blue: 3
+        }
     }
 }
 

@@ -12,7 +12,8 @@ extension Round {
             return
         }
 
-        // Nail anyone who forgot to call 하나 before this player acts.
+        // Only the seat immediately before the forgetful player catches them
+        // (gives time through earlier bots to tap 하나).
         catchMissedHanaIfNeeded(callerID: currentPlayerID)
 
         // Re-read state: a catch does not change whose turn it is, but the round
@@ -23,9 +24,6 @@ extension Round {
             return
         }
 
-        // Call 하나 while still holding 2 cards, before discarding down to one.
-        callHanaIfHoldingTwoCards(playerID: playerID)
-
         switch currentPhase {
         case .playOrDraw:
             makeAIPlayOrDraw(playerID: playerID, difficulty: difficulty)
@@ -34,31 +32,24 @@ extension Round {
             makeAIDrawnCardDecision(playerID: playerID, difficulty: difficulty)
         }
 
-        // Safety net if they somehow reached one card without a prior call.
+        // Bots call 하나 right after discarding down to one.
         if ruleOptions.unoCallPenalty && playerWhoNeedsToCallHana == playerID {
             try? callHana(playerID: playerID)
         }
     }
 
-    private mutating func callHanaIfHoldingTwoCards(playerID: PlayerID) {
-        guard ruleOptions.unoCallPenalty,
-              let playerIndex = playerHandIndex(for: playerID),
-              playerHands[playerIndex].cards.count == 2,
-              playerHands[playerIndex].calledHana == false
-        else {
-            return
-        }
-        try? callHana(playerID: playerID)
-    }
-
-    /// Catches a player who dropped to one card without calling 하나.
+    /// Catches a forgotten 하나 only when this caller is the last player before
+    /// the target's next turn.
     private mutating func catchMissedHanaIfNeeded(callerID: PlayerID) {
         guard ruleOptions.unoCallPenalty,
               let targetID = playerWhoNeedsToCallHana,
-              targetID != callerID
+              targetID != callerID,
+              let callerIndex = playerHandIndex(for: callerID)
         else {
             return
         }
+        let nextPlayerID = playerHands[nextPlayerIndex(from: callerIndex)].player.id
+        guard nextPlayerID == targetID else { return }
         try? catchMissedHana(callerID: callerID, targetID: targetID)
     }
 
