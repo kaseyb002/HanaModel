@@ -41,32 +41,56 @@ extension Round {
               let topCard: Card = topDiscardCard
         else { return [] }
 
+        // After drawing, only the drawn card (last in hand) may be played.
+        if case .waitingForPlayer(let currentID, .drewCard) = state,
+           currentID == playerID {
+            guard let lastCardID: CardID = playerHands[index].cards.last,
+                  let card: Card = cardsMap[lastCardID]
+            else { return [] }
+            return isPlayable(
+                card,
+                topCard: topCard,
+                playerIndex: index
+            ) ? [card] : []
+        }
+
         return playerHands[index].cards.compactMap { cardID in
             guard let card: Card = cardsMap[cardID] else { return nil }
-
-            if pendingDrawCount > 0 && ruleOptions.stackingDrawCards {
-                switch (topCard.kind, card.kind) {
-                case (.drawTwo, .drawTwo): return card
-                case (.wildDrawFour, .wildDrawFour): return card
-                default: return nil
-                }
-            }
-
-            guard card.kind.canPlayOn(topKind: topCard.kind, activeColor: activeColor) else {
-                return nil
-            }
-
-            if case .wildDrawFour = card.kind,
-               ruleOptions.allowWildDrawFourAnytime == false {
-                let hasMatchingColor: Bool = playerHands[index].cards.contains { id in
-                    guard let c: Card = cardsMap[id] else { return false }
-                    return c.kind.color == activeColor && c.id != card.id
-                }
-                if hasMatchingColor { return nil }
-            }
-
-            return card
+            return isPlayable(
+                card,
+                topCard: topCard,
+                playerIndex: index
+            ) ? card : nil
         }
+    }
+
+    private func isPlayable(
+        _ card: Card,
+        topCard: Card,
+        playerIndex: Int
+    ) -> Bool {
+        if pendingDrawCount > 0 && ruleOptions.stackingDrawCards {
+            switch (topCard.kind, card.kind) {
+            case (.drawTwo, .drawTwo): return true
+            case (.wildDrawFour, .wildDrawFour): return true
+            default: return false
+            }
+        }
+
+        guard card.kind.canPlayOn(topKind: topCard.kind, activeColor: activeColor) else {
+            return false
+        }
+
+        if case .wildDrawFour = card.kind,
+           ruleOptions.allowWildDrawFourAnytime == false {
+            let hasMatchingColor: Bool = playerHands[playerIndex].cards.contains { id in
+                guard let other: Card = cardsMap[id] else { return false }
+                return other.kind.color == activeColor && other.id != card.id
+            }
+            if hasMatchingColor { return false }
+        }
+
+        return true
     }
 
     public var logValue: String {

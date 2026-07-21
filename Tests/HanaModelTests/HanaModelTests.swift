@@ -266,6 +266,57 @@ import Testing
     }
 }
 
+@Test func playableCardsAfterDrawOnlyIncludesDrawnCard() throws {
+    let cookedCards: [Card] = buildCookedDeck(
+        player1Cards: [
+            .number(color: .red, rank: .two),
+            .number(color: .blue, rank: .three),
+            .number(color: .blue, rank: .four),
+            .number(color: .blue, rank: .five),
+            .number(color: .blue, rank: .six),
+            .number(color: .blue, rank: .seven),
+            .number(color: .blue, rank: .eight),
+        ],
+        player2Cards: [
+            .number(color: .green, rank: .one),
+            .number(color: .green, rank: .two),
+            .number(color: .green, rank: .three),
+            .number(color: .green, rank: .four),
+            .number(color: .green, rank: .five),
+            .number(color: .green, rank: .six),
+            .number(color: .green, rank: .seven),
+        ],
+        firstDiscard: .number(color: .red, rank: .zero),
+        drawPileKind: .number(color: .red, rank: .nine)
+    )
+
+    var round: Round = try .init(
+        cookedDeck: cookedCards,
+        players: [
+            .fake(id: "p1", name: "Alice", points: 0),
+            .fake(id: "p2", name: "Bob", points: 0),
+        ]
+    )
+
+    let redTwoID: CardID = round.playerHands[0].cards.first {
+        round.cardsMap[$0]?.kind == .number(color: .red, rank: .two)
+    }!
+    // Before drawing, red 2 is playable on red 0.
+    #expect(round.playableCards(for: "p1").map(\.id).contains(redTwoID))
+
+    try round.drawCard()
+
+    guard case .waitingForPlayer("p1", .drewCard) = round.state else {
+        Issue.record("Expected drewCard phase after drawing a playable card")
+        return
+    }
+
+    let drawnCardID: CardID = round.playerHands[0].cards.last!
+    let playableIDs: [CardID] = round.playableCards(for: "p1").map(\.id)
+    #expect(playableIDs == [drawnCardID])
+    #expect(playableIDs.contains(redTwoID) == false)
+}
+
 @Test func passAfterDraw() throws {
     let cookedCards: [Card] = buildCookedDeck(
         player1Cards: [
