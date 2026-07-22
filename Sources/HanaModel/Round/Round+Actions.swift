@@ -102,9 +102,16 @@ extension Round {
             activeColor = cardColor
         }
 
+        let loggedSwapTarget: PlayerID? = {
+            guard ruleOptions.sevenZero,
+                  case .number(_, .seven) = card.kind
+            else { return nil }
+            return swapWithPlayerID
+        }()
+
         log.addAction(.init(
             playerID: currentPlayerID,
-            decision: .playCard(cardId: cardID)
+            decision: .playCard(cardId: cardID, swapWithPlayerId: loggedSwapTarget)
         ))
 
         if playerHands[playerIndex].cards.isEmpty {

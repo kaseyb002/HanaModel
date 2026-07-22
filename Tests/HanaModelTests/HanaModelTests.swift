@@ -1041,6 +1041,63 @@ import Testing
     #expect(round.playerHands[0].cards.count == 3)
 }
 
+// MARK: - Seven-Zero Log Tests
+
+@Test func sevenZeroPlayLogsSwapTarget() throws {
+    let cookedCards: [Card] = buildCookedDeck(
+        player1Cards: [
+            .number(color: .red, rank: .seven),
+            .number(color: .red, rank: .one),
+            .number(color: .red, rank: .two),
+            .number(color: .red, rank: .three),
+            .number(color: .red, rank: .four),
+            .number(color: .red, rank: .five),
+            .number(color: .red, rank: .six),
+        ],
+        player2Cards: [
+            .number(color: .blue, rank: .one),
+            .number(color: .blue, rank: .two),
+            .number(color: .blue, rank: .three),
+            .number(color: .blue, rank: .four),
+            .number(color: .blue, rank: .five),
+            .number(color: .blue, rank: .six),
+            .number(color: .blue, rank: .seven),
+        ],
+        firstDiscard: .number(color: .red, rank: .zero),
+        drawPileKind: .number(color: .green, rank: .one)
+    )
+
+    var round: Round = try .init(
+        ruleOptions: .init(sevenZero: true),
+        cookedDeck: cookedCards,
+        players: [
+            .fake(id: "p1", name: "Alice", points: 0),
+            .fake(id: "p2", name: "Bob", points: 0),
+        ]
+    )
+
+    let sevenID: CardID = round.playerHands[0].cards.first {
+        round.cardsMap[$0]?.kind == .number(color: .red, rank: .seven)
+    }!
+    try round.playCard(sevenID, swapWithPlayerID: "p2")
+
+    guard case .playCard(let cardID, let swapWithPlayerID) = round.log.actions.last?.decision else {
+        Issue.record("Expected playCard log decision")
+        return
+    }
+    #expect(cardID == sevenID)
+    #expect(swapWithPlayerID == "p2")
+}
+
+@Test func playCardDecisionDecodesWithoutSwapTarget() throws {
+    let json: String = #"{"playCard":{"cardId":5}}"#
+    let decision: Round.Log.PlayerAction.Decision = try JSONDecoder().decode(
+        Round.Log.PlayerAction.Decision.self,
+        from: Data(json.utf8)
+    )
+    #expect(decision == .playCard(cardId: 5, swapWithPlayerId: nil))
+}
+
 // MARK: - Codable Tests
 
 @Test func roundCodable() throws {

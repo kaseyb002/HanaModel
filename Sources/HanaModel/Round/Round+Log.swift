@@ -12,7 +12,7 @@ extension Round {
             public let timestamp: Date
 
             public enum Decision: Equatable, Codable, Sendable {
-                case playCard(cardId: CardID)
+                case playCard(cardId: CardID, swapWithPlayerId: PlayerID? = nil)
                 case drawCards(count: Int)
                 case pass
                 case callHana
