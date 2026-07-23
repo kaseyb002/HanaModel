@@ -32,13 +32,6 @@ public struct RuleOptions: Equatable, Codable, Sendable {
     /// Official Mattel: off.
     public var sevenZero: Bool
 
-    /// When `true`, a draw (outside of a pending draw penalty) keeps pulling cards
-    /// until one is playable on the discard pile. When `false`, the player draws
-    /// exactly one card per draw action.
-    ///
-    /// Official Mattel: off.
-    public var drawUntilPlayable: Bool
-
     /// When `true`, after drawing a playable card the player must play it — they
     /// cannot pass. When `false`, they may either play the drawn card or pass and
     /// keep it.
@@ -64,7 +57,6 @@ public struct RuleOptions: Equatable, Codable, Sendable {
         stackingDrawCards: Bool = false,
         jumpIn: Bool = false,
         sevenZero: Bool = false,
-        drawUntilPlayable: Bool = false,
         forcePlayDrawnCard: Bool = false,
         allowWildDrawFourAnytime: Bool = false,
         unoCallPenalty: Bool = false
@@ -72,7 +64,6 @@ public struct RuleOptions: Equatable, Codable, Sendable {
         self.stackingDrawCards = stackingDrawCards
         self.jumpIn = jumpIn
         self.sevenZero = sevenZero
-        self.drawUntilPlayable = drawUntilPlayable
         self.forcePlayDrawnCard = forcePlayDrawnCard
         self.allowWildDrawFourAnytime = allowWildDrawFourAnytime
         self.unoCallPenalty = unoCallPenalty

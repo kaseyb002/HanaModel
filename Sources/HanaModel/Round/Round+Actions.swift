@@ -144,40 +144,39 @@ extension Round {
         }
 
         if pendingDrawCount > 0 {
+            let penaltyCount: Int = pendingDrawCount
             applyDrawPenalty(to: playerIndex)
             log.addAction(.init(
                 playerID: currentPlayerID,
-                decision: .drawCards(count: pendingDrawCount > 0 ? pendingDrawCount : 2)
+                decision: .drawCards(count: penaltyCount)
             ))
             advancePlayer(from: playerIndex)
             return
         }
 
-        var drawnCount: Int = 0
-        var lastDrawnPlayable: Bool = false
-
-        repeat {
-            guard let drawnCardID: CardID = drawOneCard(for: playerIndex) else {
-                endRoundDeckEmpty()
-                return
-            }
-            drawnCount += 1
-
-            if let drawnCard: Card = cardsMap[drawnCardID],
-               let topCard: Card = topDiscardCard {
-                lastDrawnPlayable = drawnCard.kind.canPlayOn(
-                    topKind: topCard.kind,
-                    activeColor: activeColor
-                )
-            }
-        } while ruleOptions.drawUntilPlayable && lastDrawnPlayable == false
+        guard let drawnCardID: CardID = drawOneCard(for: playerIndex) else {
+            endRoundDeckEmpty()
+            return
+        }
 
         log.addAction(.init(
             playerID: currentPlayerID,
-            decision: .drawCards(count: drawnCount)
+            decision: .drawCards(count: 1)
         ))
 
-        if lastDrawnPlayable {
+        let drawnPlayable: Bool = {
+            guard let drawnCard: Card = cardsMap[drawnCardID],
+                  let topCard: Card = topDiscardCard
+            else {
+                return false
+            }
+            return drawnCard.kind.canPlayOn(
+                topKind: topCard.kind,
+                activeColor: activeColor
+            )
+        }()
+
+        if drawnPlayable {
             state = .waitingForPlayer(playerId: currentPlayerID, phase: .drewCard)
         } else {
             advancePlayer(from: playerIndex)

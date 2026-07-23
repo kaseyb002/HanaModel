@@ -363,6 +363,50 @@ import Testing
     #expect(round.currentPlayerID == "p1")
 }
 
+/// Voluntary draws are always one card per tap. If it isn't playable, the turn
+/// advances; the player does not keep auto-drawing.
+@Test func voluntaryDrawPullsExactlyOneCard() throws {
+    let cookedCards: [Card] = buildCookedDeck(
+        player1Cards: [
+            .number(color: .yellow, rank: .zero),
+            .number(color: .yellow, rank: .one),
+            .number(color: .yellow, rank: .two),
+            .number(color: .yellow, rank: .three),
+            .number(color: .yellow, rank: .four),
+            .number(color: .yellow, rank: .six),
+            .number(color: .yellow, rank: .seven),
+        ],
+        player2Cards: [
+            .number(color: .red, rank: .zero),
+            .number(color: .red, rank: .one),
+            .number(color: .red, rank: .two),
+            .number(color: .red, rank: .three),
+            .number(color: .red, rank: .four),
+            .number(color: .red, rank: .six),
+            .number(color: .red, rank: .seven),
+        ],
+        firstDiscard: .number(color: .blue, rank: .five),
+        drawPileKind: .number(color: .green, rank: .three)
+    )
+
+    var round: Round = try .init(
+        cookedDeck: cookedCards,
+        players: [
+            .fake(id: "p1", name: "Alice", points: 0),
+            .fake(id: "p2", name: "Bob", points: 0),
+        ]
+    )
+
+    #expect(round.playableCards(for: "p1").isEmpty)
+
+    let handSizeBefore: Int = round.playerHands[0].cards.count
+    try round.drawCard()
+
+    #expect(round.playerHands[0].cards.count == handSizeBefore + 1)
+    #expect(round.log.actions.last?.decision == .drawCards(count: 1))
+    #expect(round.currentPlayerID == "p2")
+}
+
 // MARK: - Skip Tests
 
 @Test func skipCard() throws {
@@ -893,7 +937,6 @@ import Testing
     #expect(RuleOptions.classic.stackingDrawCards == false)
     #expect(RuleOptions.classic.jumpIn == false)
     #expect(RuleOptions.classic.sevenZero == false)
-    #expect(RuleOptions.classic.drawUntilPlayable == false)
     #expect(RuleOptions.classic.forcePlayDrawnCard == false)
     #expect(RuleOptions.classic.allowWildDrawFourAnytime == false)
 }
