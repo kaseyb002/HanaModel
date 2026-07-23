@@ -363,9 +363,76 @@ import Testing
     #expect(round.currentPlayerID == "p1")
 }
 
-/// Voluntary draws are always one card per tap. If it isn't playable, the turn
-/// advances; the player does not keep auto-drawing.
-@Test func voluntaryDrawPullsExactlyOneCard() throws {
+/// With `drawUntilPlayable`, each voluntary draw is still one card. Unplayable
+/// draws leave the player on their turn so they can tap draw again.
+@Test func drawUntilPlayableStaysOnTurnUntilPlayable() throws {
+    let cookedCards: [Card] = buildCookedDeck(
+        player1Cards: [
+            .number(color: .yellow, rank: .zero),
+            .number(color: .yellow, rank: .one),
+            .number(color: .yellow, rank: .two),
+            .number(color: .yellow, rank: .three),
+            .number(color: .yellow, rank: .four),
+            .number(color: .yellow, rank: .six),
+            .number(color: .yellow, rank: .seven),
+        ],
+        player2Cards: [
+            .number(color: .red, rank: .zero),
+            .number(color: .red, rank: .one),
+            .number(color: .red, rank: .two),
+            .number(color: .red, rank: .three),
+            .number(color: .red, rank: .four),
+            .number(color: .red, rank: .six),
+            .number(color: .red, rank: .seven),
+        ],
+        firstDiscard: .number(color: .blue, rank: .five),
+        drawPileKind: .number(color: .green, rank: .three),
+        drawPileDrawOrder: [
+            .number(color: .green, rank: .three),
+            .number(color: .green, rank: .four),
+            .number(color: .blue, rank: .eight),
+        ]
+    )
+
+    var round: Round = try .init(
+        ruleOptions: .init(drawUntilPlayable: true, forcePlayDrawnCard: true),
+        cookedDeck: cookedCards,
+        players: [
+            .fake(id: "p1", name: "Alice", points: 0),
+            .fake(id: "p2", name: "Bob", points: 0),
+        ]
+    )
+
+    #expect(round.playableCards(for: "p1").isEmpty)
+
+    try round.drawCard()
+    #expect(round.log.actions.last?.decision == .drawCards(count: 1))
+    #expect(round.currentPlayerID == "p1")
+    guard case .waitingForPlayer("p1", .playOrDraw) = round.state else {
+        Issue.record("Expected to stay on playOrDraw after unplayable draw")
+        return
+    }
+
+    try round.drawCard()
+    #expect(round.currentPlayerID == "p1")
+    guard case .waitingForPlayer("p1", .playOrDraw) = round.state else {
+        Issue.record("Expected to stay on playOrDraw after second unplayable draw")
+        return
+    }
+
+    try round.drawCard()
+    #expect(round.log.actions.filter {
+        if case .drawCards = $0.decision { return true }
+        return false
+    }.count == 3)
+    guard case .waitingForPlayer("p1", .drewCard) = round.state else {
+        Issue.record("Expected drewCard after finally drawing a playable card")
+        return
+    }
+    #expect(round.cardsMap[round.playerHands[0].cards.last!]?.kind == .number(color: .blue, rank: .eight))
+}
+
+@Test func classicVoluntaryDrawEndsTurnWhenUnplayable() throws {
     let cookedCards: [Card] = buildCookedDeck(
         player1Cards: [
             .number(color: .yellow, rank: .zero),
@@ -397,12 +464,7 @@ import Testing
         ]
     )
 
-    #expect(round.playableCards(for: "p1").isEmpty)
-
-    let handSizeBefore: Int = round.playerHands[0].cards.count
     try round.drawCard()
-
-    #expect(round.playerHands[0].cards.count == handSizeBefore + 1)
     #expect(round.log.actions.last?.decision == .drawCards(count: 1))
     #expect(round.currentPlayerID == "p2")
 }
@@ -937,6 +999,7 @@ import Testing
     #expect(RuleOptions.classic.stackingDrawCards == false)
     #expect(RuleOptions.classic.jumpIn == false)
     #expect(RuleOptions.classic.sevenZero == false)
+    #expect(RuleOptions.classic.drawUntilPlayable == false)
     #expect(RuleOptions.classic.forcePlayDrawnCard == false)
     #expect(RuleOptions.classic.allowWildDrawFourAnytime == false)
 }
@@ -1193,12 +1256,16 @@ private func makeSimpleRound() throws -> Round {
 /// Cards are laid out so that dealing from the end gives Player 1 the first 7,
 /// Player 2 the next 7 (or Player 3 the next 7 after that), then the first discard,
 /// then the draw pile fills the front.
+///
+/// - Parameter drawPileDrawOrder: Optional cards drawn first-to-last from the
+///   top of the draw pile (overrides trailing `drawPileKind` fillers).
 private func buildCookedDeck(
     player1Cards: [Card.Kind],
     player2Cards: [Card.Kind],
     player3Cards: [Card.Kind]? = nil,
     firstDiscard: Card.Kind,
-    drawPileKind: Card.Kind
+    drawPileKind: Card.Kind,
+    drawPileDrawOrder: [Card.Kind] = []
 ) -> [Card] {
     var cards: [Card] = []
     var nextID: Int = 0
@@ -1206,8 +1273,15 @@ private func buildCookedDeck(
     let drawPileSize: Int = 108 - player1Cards.count - player2Cards.count
         - (player3Cards?.count ?? 0) - 1
 
-    for _ in 0..<drawPileSize {
-        cards.append(.init(id: nextID, kind: drawPileKind))
+    var drawPileKinds: [Card.Kind] = Array(repeating: drawPileKind, count: drawPileSize)
+    for (offset, kind) in drawPileDrawOrder.enumerated() {
+        let index: Int = drawPileSize - 1 - offset
+        precondition(index >= 0, "drawPileDrawOrder longer than draw pile")
+        drawPileKinds[index] = kind
+    }
+
+    for kind in drawPileKinds {
+        cards.append(.init(id: nextID, kind: kind))
         nextID += 1
     }
 

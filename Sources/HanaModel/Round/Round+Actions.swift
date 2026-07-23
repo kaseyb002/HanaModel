@@ -178,6 +178,9 @@ extension Round {
 
         if drawnPlayable {
             state = .waitingForPlayer(playerId: currentPlayerID, phase: .drewCard)
+        } else if ruleOptions.drawUntilPlayable {
+            // Stay on playOrDraw so the player can tap draw again (one card at a time).
+            state = .waitingForPlayer(playerId: currentPlayerID, phase: .playOrDraw)
         } else {
             advancePlayer(from: playerIndex)
         }
